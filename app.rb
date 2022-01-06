@@ -51,14 +51,21 @@ loop do
 
     parsed_resources_collection << parsed_resource
   rescue JSON::ParserError
+    puts "JSON error: #{json_part}"
     # Still incomplete JSON so add to previous part
     previous_json_part << json_part
   end
 
   parsed_resources_collection.each do |parsed_resource|
-    next if parsed_resource.empty?
+    if parsed_resource.empty?
+      puts "Received heartbeat"
+
+      next
+    end
 
     index = parsed_resource.dig("Index")
+
+    puts "index: #{index}"
 
     # Ignore older events
     next if last_index >= index
@@ -72,10 +79,12 @@ loop do
         allocation_resource = event_resource.dig("Payload", "Allocation")
         job_id = allocation_resource.dig("JobID")
 
+        puts "job_id: #{job_id}"
+
         task_state_resources = allocation_resource.dig("TaskStates")
 
         unless task_state_resources
-          puts event_resource.inspect
+          puts "No task state resources for #{job_id}, skipping!"
 
           next
         end
@@ -86,8 +95,6 @@ loop do
 
           task_identifier = "#{job_id}.#{task_id}"
           task_events_last_handled_at = task_metadata[task_identifier][:last_event_timestamp] || started_at
-
-          puts "#{task_identifier}, task_events_last_handled_at: #{task_events_last_handled_at}"
 
           most_recent_event_timestamp = nil
 
@@ -104,7 +111,6 @@ loop do
             timestamp = task_event_resource.dig("Time")
 
             if most_recent_event_timestamp.nil? || timestamp > most_recent_event_timestamp
-              puts "setting msot recent timestamp"
               most_recent_event_timestamp = timestamp
             end
 
@@ -114,24 +120,34 @@ loop do
             task_event_display_message = task_event_resource.dig("DisplayMessage")
             task_event_details = task_event_resource.dig("Details")
 
-            content = "**#{task_identifier}** task is **#{task_event_type}**: #{task_event_display_message} #{timestamp}"
-            content << "```#{task_event_details}```" if task_event_details.any?
+            content = "**#{task_identifier}** task is **#{task_event_type}**"
+            description = task_event_display_message
+            description << "```#{task_event_details}```" if task_event_details.any?
+            is_critical =
+              case task_event_type
+              when "Terminated"
+                task_event_details["oom_killed"] || task_event_details["exit_code"] != 0
+              else
+                false
+              end
+
+            embed = {
+              description: description,
+            }
+
+            embed[:color] = 15158332 if is_critical
 
             HTTP.post(DISCORD_WEBHOOK_URL,
               json: {
                 content: content,
+                embeds: [embed],
               },
             )
           end
 
-          puts "most recent event itmestamp: #{most_recent_event_timestamp}"
-          puts "task_events_last_handled_at: #{task_events_last_handled_at}"
-
           if most_recent_event_timestamp && most_recent_event_timestamp > task_events_last_handled_at
             task_metadata[task_identifier][:last_event_timestamp] = most_recent_event_timestamp
           end
-
-          puts "#{task_identifier}, set last_event_timestamp to: #{task_metadata[task_identifier][:last_event_timestamp]}"
         end
       end
 
