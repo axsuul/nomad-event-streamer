@@ -14,5 +14,4 @@ RUN bundle install
 
 COPY . $RAILS_ROOT
 
-# By default, run puma server
 CMD bundle exec ruby app.rb
