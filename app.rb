@@ -4,8 +4,7 @@ require "active_support"
 require "active_support/core_ext"
 require "http"
 
-NOMAD_ADDR = ENV["NOMAD_ADDR"] || "http://localhost:4646"
-NOMAD_API_BASE_URL = "#{NOMAD_ADDR}/v1".freeze
+require_relative "lib/ndjson"
 
 # Returns current timestamp in same integer format as Nomad with nanoseconds
 def current_timestamp
@@ -16,18 +15,21 @@ def parse_env_list(key)
   ENV[key]&.split(",")&.map(&:strip) || []
 end
 
+NOMAD_ADDR = ENV["NOMAD_ADDR"] || "http://localhost:4646"
+NOMAD_API_BASE_URL = "#{NOMAD_ADDR}/v1".freeze
+
 DISCORD_WEBHOOK_URL = ENV["DISCORD_WEBHOOK_URL"]
-EVENT_TYPE_ALLOWLIST = parse_env_list("EVENT_TYPE_ALLOWLIST")
-EVENT_TYPE_DENYLIST = parse_env_list("EVENT_TYPE_DENYLIST")
+
+# https://www.nomadproject.io/api-docs/allocations#events
 TASK_EVENT_TYPE_ALLOWLIST = parse_env_list("TASK_EVENT_TYPE_ALLOWLIST")
 TASK_EVENT_TYPE_DENYLIST = parse_env_list("TASK_EVENT_TYPE_DENYLIST")
 
 # Retrieve last index so we now which events are older
 agent_response = HTTP.get("#{NOMAD_API_BASE_URL}/agent/self")
 started_at = current_timestamp
-last_index = JSON.parse(agent_response.body).dig("stats", "raft", "last_log_index")&.to_i
+starting_index = JSON.parse(agent_response.body).dig("stats", "raft", "last_log_index")&.to_i
 
-puts "Last index: #{last_index}"
+puts "Starting index: #{starting_index}"
 
 # Used for tracking each job task
 # task_metadata = Hash.new { |h, job_id| h[job_id] = Hash.new { |hh, task_id| hh[task_id] = {} } }
@@ -35,40 +37,33 @@ task_metadata = Hash.new { |h, k| h[k] = {} }
 
 event_stream_body = HTTP.get("#{NOMAD_API_BASE_URL}/event/stream").body
 
-previous_json_part = ""
+ndjson = NDJSON.new
 
 loop do
-  # The incoming stream can be incomplete JSON but because it's using ndjson format we know when it begins and ends
-  json_parts = event_stream_body.readpartial.split("\n")
-
   parsed_resources_collection = []
 
-  json_parts.each do |json_part|
-    parsed_resource = JSON.parse(previous_json_part + json_part)
+  # Need to keep reading until it returns nil
+  while (partial = event_stream_body.readpartial)
+    puts "Read partial: #{partial.inspect}"
+    parsed_resources_collection += ndjson.parse_partial(partial)
+    # puts "Parsed collection: #{parsed_resources_collection.inspect}"
+  end
 
-    # Previous part was parsed correctly so we can start on next part
-    previous_json_part = ""
+  # puts "inspect", parsed_resources_collection.inspect
 
-    parsed_resources_collection << parsed_resource
-  rescue JSON::ParserError
-    puts "JSON error: #{json_part}"
-    # Still incomplete JSON so add to previous part
-    previous_json_part << json_part
+  if parsed_resources_collection.empty?
+    puts "Heartbeat detected"
+
+    next
   end
 
   parsed_resources_collection.each do |parsed_resource|
-    if parsed_resource.empty?
-      puts "Received heartbeat"
-
-      next
-    end
-
     index = parsed_resource.dig("Index")
 
-    puts "index: #{index}"
-
     # Ignore older events
-    next if last_index >= index
+    next if starting_index >= index
+
+    puts "Current index: #{index}"
 
     parsed_resource.dig("Events").each do |event_resource|
       # For debugging purposes
@@ -126,7 +121,7 @@ loop do
             is_critical =
               case task_event_type
               when "Terminated"
-                task_event_details["oom_killed"] || task_event_details["exit_code"] != 0
+                task_event_details["oom_killed"] == "true" || task_event_details["exit_code"] != 0
               else
                 false
               end
@@ -136,6 +131,8 @@ loop do
             }
 
             embed[:color] = 15158332 if is_critical
+
+            puts "Sending to Discord: #{content}"
 
             HTTP.post(DISCORD_WEBHOOK_URL,
               json: {
@@ -150,11 +147,6 @@ loop do
           end
         end
       end
-
-      # event_type = event_resource.dig("Type")
-
-      # payload_resource = event_resource.dig("Payload")
-
     end
   end
 end
