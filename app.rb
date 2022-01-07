@@ -35,7 +35,8 @@ HEARTBEAT_UNDETECTED_EXIT_THRESHOLD = ENV["HEARTBEAT_UNDETECTED_EXIT_THRESHOLD"]
 # Where Discord events are sent
 DISCORD_WEBHOOK_URL = ENV["DISCORD_WEBHOOK_URL"]
 
-# https://www.nomadproject.io/api-docs/allocations#events
+# Comma separated event types to allow or deny (ignore)
+# See for possible event types: https://www.nomadproject.io/api-docs/allocations#events
 TASK_EVENT_TYPE_ALLOWLIST = parse_env_list("TASK_EVENT_TYPE_ALLOWLIST")
 TASK_EVENT_TYPE_DENYLIST = parse_env_list("TASK_EVENT_TYPE_DENYLIST")
 
