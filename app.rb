@@ -68,35 +68,33 @@ loop do
 
         task_state_resources = allocation_resource.dig("TaskStates")
 
-        unless task_state_resources
-          puts "No task state resources for #{job_id}, skipping!"
-
-          next
-        end
+        next unless task_state_resources
 
         task_state_resources.each do |task_id, task_state_resource|
           # Ignore connect proxies
           next if task_id.match(/connect-proxy/)
 
           task_identifier = "#{job_id}.#{task_id}"
-          task_events_last_handled_at = task_metadata[task_identifier][:last_event_timestamp] || started_at
+          task_events_latest_timestamp_cached = task_metadata[task_identifier][:latest_timestamp] || started_at
+          task_events_latest_timestamp = nil
+          task_events = task_state_resource.dig("Events")
 
-          puts "#{task_identifier}: Events detected"
+          puts "#{task_identifier}: #{task_events.size} #{'event'.pluralize(task_events.size)} detected"
 
-          most_recent_event_timestamp = nil
-
-          task_state_resource.dig("Events").each do |task_event_resource|
+          task_events.each do |task_event_resource|
             task_event_type = task_event_resource.dig("Type")
 
             # UNIX timestamp with nine additional digits appended to represent nanoseconds
             timestamp = task_event_resource.dig("Time")
 
-            if most_recent_event_timestamp.nil? || timestamp > most_recent_event_timestamp
-              most_recent_event_timestamp = timestamp
+            if task_events_latest_timestamp.nil? || timestamp > task_events_latest_timestamp
+              puts "#{task_identifier}: \"#{task_event_type}\" event skipped since older"
+
+              task_events_latest_timestamp = timestamp
             end
 
             # Ignore events we've already seen or events that happened before we started monitoring
-            next if timestamp <= task_events_last_handled_at
+            next if timestamp <= task_events_latest_timestamp_cached
 
             if TASK_EVENT_TYPE_DENYLIST.include?(task_event_type)
               puts "#{task_identifier}: \"#{task_event_type}\" event skipped due to denylist"
@@ -142,8 +140,8 @@ loop do
           end
 
           # Track most recent event timestamp for task so we don't re-do events we've already seen next time around
-          if most_recent_event_timestamp && most_recent_event_timestamp > task_events_last_handled_at
-            task_metadata[task_identifier][:last_event_timestamp] = most_recent_event_timestamp
+          if task_events_latest_timestamp && task_events_latest_timestamp > task_events_latest_timestamp_cached
+            task_metadata[task_identifier][:latest_timestamp] = task_events_latest_timestamp
           end
         end
       end
