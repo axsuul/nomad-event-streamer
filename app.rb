@@ -7,12 +7,19 @@ require "http"
 require_relative "lib/ndjson"
 
 # Returns current timestamp in same integer format as Nomad with nanoseconds
-def current_timestamp
-  # Number of subseconds can vary depending on system
-  seconds, subseconds = Time.now.to_f.to_s.split(".")
+def current_timestamp(format: nil)
+  timestamp = Time.now.to_f
 
-  # Ensure there's always 9 additional digits representing nanoseconds after the timestamp representing seconds
-  "#{seconds}#{subseconds}#{'0' * (9 - subseconds.length)}".to_i
+  case format
+  when :nomad
+    # Number of subseconds can vary depending on system
+    seconds, subseconds = timestamp.to_s.split(".")
+
+    # Ensure there's always 9 additional digits representing nanoseconds after the timestamp representing seconds
+    "#{seconds}#{subseconds}#{'0' * (9 - subseconds.length)}".to_i
+  else
+    timestamp.to_i
+  end
 end
 
 def parse_env_list(key)
@@ -22,6 +29,10 @@ end
 NOMAD_ADDR = ENV["NOMAD_ADDR"] || "http://localhost:4646"
 NOMAD_API_BASE_URL = "#{NOMAD_ADDR}/v1".freeze
 
+# Will automatically exit if number of seconds have elapsed past threshold since last heartbeat
+HEARTBEAT_UNDETECTED_EXIT_THRESHOLD = ENV["HEARTBEAT_UNDETECTED_EXIT_THRESHOLD"].presence&.to_i
+
+# Where Discord events are sent
 DISCORD_WEBHOOK_URL = ENV["DISCORD_WEBHOOK_URL"]
 
 # https://www.nomadproject.io/api-docs/allocations#events
@@ -30,9 +41,10 @@ TASK_EVENT_TYPE_DENYLIST = parse_env_list("TASK_EVENT_TYPE_DENYLIST")
 
 # Retrieve last index so we now which events are older
 agent_response = HTTP.get("#{NOMAD_API_BASE_URL}/agent/self")
-
-started_at = current_timestamp
 starting_index = JSON.parse(agent_response.body).dig("stats", "raft", "last_log_index")&.to_i
+
+started_at = current_timestamp(format: :nomad)
+heartbeat_detected_at = current_timestamp
 
 puts "Starting index: #{starting_index}"
 
@@ -43,6 +55,25 @@ event_stream_body = HTTP.get("#{NOMAD_API_BASE_URL}/event/stream").body
 
 ndjson = NDJSON.new
 
+if HEARTBEAT_UNDETECTED_EXIT_THRESHOLD
+  # Check for heartbeat every second to determine if we need to exit
+  Thread.new do
+    loop do
+      seconds_since_last_heartbeat = current_timestamp - heartbeat_detected_at
+
+      if seconds_since_last_heartbeat > HEARTBEAT_UNDETECTED_EXIT_THRESHOLD
+        puts "Heartbeat undetected for #{seconds_since_last_heartbeat} " \
+          "#{'second'.pluralize(seconds_since_last_heartbeat)} " \
+          "(threshold: #{HEARTBEAT_UNDETECTED_EXIT_THRESHOLD}), exiting..."
+
+        exit 1
+      end
+
+      sleep 1
+    end
+  end
+end
+
 loop do
   parsed_resources_collection = ndjson.parse_partial(event_stream_body.readpartial)
 
@@ -50,6 +81,8 @@ loop do
     # An empty JSON object is to signal heartbeat
     if parsed_resource.empty?
       puts "Heartbeat detected"
+
+      heartbeat_detected_at = current_timestamp
 
       next
     end
