@@ -88,18 +88,6 @@ loop do
           task_state_resource.dig("Events").each do |task_event_resource|
             task_event_type = task_event_resource.dig("Type")
 
-            if TASK_EVENT_TYPE_DENYLIST.include?(task_event_type)
-              puts "#{task_identifier}: #{task_event_type} event skipped due to denylist"
-
-              next
-            end
-
-            if TASK_EVENT_TYPE_ALLOWLIST.any? && !TASK_EVENT_TYPE_ALLOWLIST.include?(task_event_type)
-              puts "#{task_identifier}: #{task_event_type} event skipped due to allowlist"
-
-              next
-            end
-
             # UNIX timestamp with nine additional digits appended to represent nanoseconds
             timestamp = task_event_resource.dig("Time")
 
@@ -109,6 +97,18 @@ loop do
 
             # Ignore events we've already seen or events that happened before we started monitoring
             next if timestamp <= task_events_last_handled_at
+
+            if TASK_EVENT_TYPE_DENYLIST.include?(task_event_type)
+              puts "#{task_identifier}: \"#{task_event_type}\" event skipped due to denylist"
+
+              next
+            end
+
+            if TASK_EVENT_TYPE_ALLOWLIST.any? && !TASK_EVENT_TYPE_ALLOWLIST.include?(task_event_type)
+              puts "#{task_identifier}: \"#{task_event_type}\" event skipped due to allowlist"
+
+              next
+            end
 
             task_event_display_message = task_event_resource.dig("DisplayMessage")
             task_event_details = task_event_resource.dig("Details")
@@ -131,7 +131,7 @@ loop do
             # Add red border if event type is critical
             embed[:color] = 15158332 if is_critical
 
-            puts "#{task_identifier}: Sending #{task_event_type} event to Discord"
+            puts "#{task_identifier}: \"#{task_event_type}\" event sent to Discord"
 
             HTTP.post(DISCORD_WEBHOOK_URL,
               json: {
