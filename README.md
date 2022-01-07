@@ -1,6 +1,6 @@
 # Nomad Event Streamer
 
-Streams HashiCorp Nomad events to your favorite destination.
+Streams HashiCorp Nomad events to your favorite destinations:
 
 * Discord
 

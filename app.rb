@@ -26,6 +26,7 @@ TASK_EVENT_TYPE_DENYLIST = parse_env_list("TASK_EVENT_TYPE_DENYLIST")
 
 # Retrieve last index so we now which events are older
 agent_response = HTTP.get("#{NOMAD_API_BASE_URL}/agent/self")
+
 started_at = current_timestamp
 starting_index = JSON.parse(agent_response.body).dig("stats", "raft", "last_log_index")&.to_i
 
@@ -65,8 +66,6 @@ loop do
         allocation_resource = event_resource.dig("Payload", "Allocation")
         job_id = allocation_resource.dig("JobID")
 
-        puts "job_id: #{job_id}"
-
         task_state_resources = allocation_resource.dig("TaskStates")
 
         unless task_state_resources
@@ -82,14 +81,22 @@ loop do
           task_identifier = "#{job_id}.#{task_id}"
           task_events_last_handled_at = task_metadata[task_identifier][:last_event_timestamp] || started_at
 
+          puts "#{task_identifier}: Events detected"
+
           most_recent_event_timestamp = nil
 
           task_state_resource.dig("Events").each do |task_event_resource|
             task_event_type = task_event_resource.dig("Type")
 
-            next if TASK_EVENT_TYPE_DENYLIST.include?(task_event_type)
+            if TASK_EVENT_TYPE_DENYLIST.include?(task_event_type)
+              puts "#{task_identifier}: #{task_event_type} event skipped due to denylist"
+
+              next
+            end
 
             if TASK_EVENT_TYPE_ALLOWLIST.any? && !TASK_EVENT_TYPE_ALLOWLIST.include?(task_event_type)
+              puts "#{task_identifier}: #{task_event_type} event skipped due to allowlist"
+
               next
             end
 
@@ -124,7 +131,7 @@ loop do
             # Add red border if event type is critical
             embed[:color] = 15158332 if is_critical
 
-            puts "Sending to Discord: #{content}"
+            puts "#{task_identifier}: Sending #{task_event_type} event to Discord"
 
             HTTP.post(DISCORD_WEBHOOK_URL,
               json: {
