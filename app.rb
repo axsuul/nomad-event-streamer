@@ -32,7 +32,6 @@ starting_index = JSON.parse(agent_response.body).dig("stats", "raft", "last_log_
 puts "Starting index: #{starting_index}"
 
 # Used for tracking each job task
-# task_metadata = Hash.new { |h, job_id| h[job_id] = Hash.new { |hh, task_id| hh[task_id] = {} } }
 task_metadata = Hash.new { |h, k| h[k] = {} }
 
 event_stream_body = HTTP.get("#{NOMAD_API_BASE_URL}/event/stream").body
@@ -77,7 +76,7 @@ loop do
         end
 
         task_state_resources.each do |task_id, task_state_resource|
-          # Don't care about connect proxies
+          # Ignore connect proxies
           next if task_id.match(/connect-proxy/)
 
           task_identifier = "#{job_id}.#{task_id}"
@@ -94,7 +93,7 @@ loop do
               next
             end
 
-            # Remove last nine digits from timestamp since it has nanosecond precision
+            # UNIX timestamp with nine additional digits appended to represent nanoseconds
             timestamp = task_event_resource.dig("Time")
 
             if most_recent_event_timestamp.nil? || timestamp > most_recent_event_timestamp
@@ -122,6 +121,7 @@ loop do
               description: description,
             }
 
+            # Add red border if event type is critical
             embed[:color] = 15158332 if is_critical
 
             puts "Sending to Discord: #{content}"
@@ -134,6 +134,7 @@ loop do
             )
           end
 
+          # Track most recent event timestamp for task so we don't re-do events we've already seen next time around
           if most_recent_event_timestamp && most_recent_event_timestamp > task_events_last_handled_at
             task_metadata[task_identifier][:last_event_timestamp] = most_recent_event_timestamp
           end
