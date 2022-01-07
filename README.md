@@ -8,7 +8,11 @@ This project is under active development. Use at your own discretion!
 
 ## Usage
 
-Refer to [app.rb](./app.rb) for supported environment variables. Deploy by building Docker container from source.
+Refer to [app.rb](./app.rb) for supported environment variables. 
+
+## Docker
+
+Each commit has a [Docker image](https://github.com/axsuul/nomad-event-streamer/pkgs/container/nomad-event-streamer) built for it or use `ghcr.io/axsuul/nomad-event-streamer:latest`.
 
 ## Development
 
