@@ -94,7 +94,8 @@ loop do
 
             # Ignore events we've already seen or events that happened before we started monitoring
             if timestamp <= task_events_latest_timestamp_cached
-              puts "#{task_identifier}: \"#{task_event_type}\" event skipped since older"
+              puts "#{task_identifier}: \"#{task_event_type}\" event skipped since older (#{timestamp} vs. " \
+                "#{task_events_latest_timestamp_cached}"
 
               next
             end
