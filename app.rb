@@ -40,24 +40,16 @@ event_stream_body = HTTP.get("#{NOMAD_API_BASE_URL}/event/stream").body
 ndjson = NDJSON.new
 
 loop do
-  parsed_resources_collection = []
-
-  # Need to keep reading until it returns nil
-  while (partial = event_stream_body.readpartial)
-    puts "Read partial: #{partial.inspect}"
-    parsed_resources_collection += ndjson.parse_partial(partial)
-    # puts "Parsed collection: #{parsed_resources_collection.inspect}"
-  end
-
-  # puts "inspect", parsed_resources_collection.inspect
-
-  if parsed_resources_collection.empty?
-    puts "Heartbeat detected"
-
-    next
-  end
+  parsed_resources_collection = ndjson.parse_partial(event_stream_body.readpartial)
 
   parsed_resources_collection.each do |parsed_resource|
+    # An empty JSON object is to signal heartbeat
+    if parsed_resource.empty?
+      puts "Heartbeat detected"
+
+      next
+    end
+
     index = parsed_resource.dig("Index")
 
     # Ignore older events

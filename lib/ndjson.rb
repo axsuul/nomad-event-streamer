@@ -10,9 +10,6 @@ class NDJSON
   def parse_partial(partial)
     wholes = []
 
-    # Skip blank partials
-    return [] if partial.blank?
-
     # We know the JSON begins and ends based on new lines cause it's NDJSON format
     parts = partial.split("\n", -1)
 

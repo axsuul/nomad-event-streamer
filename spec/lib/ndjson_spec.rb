@@ -137,5 +137,18 @@ describe NDJSON do
         {},
       )
     end
+
+    it "can parse new line on its own" do
+      json_partial_1 = %({})
+      json_partial_2 = %(\n)
+
+      collection = []
+      collection += ndjson.parse_partial(json_partial_1)
+      collection += ndjson.parse_partial(json_partial_2)
+
+      expect(collection).to contain_exactly(
+        {},
+      )
+    end
   end
 end
