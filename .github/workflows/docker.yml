@@ -14,19 +14,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Configure Docker meta
-        id: meta
-        uses: docker/metadata-action@v3
-        with:
-          # Base image names (only host on GitHub for now)
-          images: |
-            ghcr.io/username/app
-
-          # Will tag image with latest (default), version, and commit hash
-          tags: |
-            type=semver,pattern={{version}}
-            type=sha
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
 
