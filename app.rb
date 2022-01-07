@@ -8,7 +8,11 @@ require_relative "lib/ndjson"
 
 # Returns current timestamp in same integer format as Nomad with nanoseconds
 def current_timestamp
-  (Time.now.to_f.to_s.split(".") | ["000"]).join("").to_i
+  # Number of subseconds can vary depending on system
+  seconds, subseconds = Time.now.to_f.to_s.split(".")
+
+  # Ensure there's always 9 additional digits representing nanoseconds after the timestamp representing seconds
+  "#{seconds}#{subseconds}#{'0' * (9 - subseconds.length)}".to_i
 end
 
 def parse_env_list(key)
@@ -94,8 +98,7 @@ loop do
 
             # Ignore events we've already seen or events that happened before we started monitoring
             if timestamp <= task_events_latest_timestamp_cached
-              puts "#{task_identifier}: \"#{task_event_type}\" event skipped since older (#{timestamp} vs. " \
-                "#{task_events_latest_timestamp_cached})"
+              puts "#{task_identifier}: \"#{task_event_type}\" event skipped due to being older"
 
               next
             end
