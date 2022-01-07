@@ -87,14 +87,17 @@ loop do
             # UNIX timestamp with nine additional digits appended to represent nanoseconds
             timestamp = task_event_resource.dig("Time")
 
+            # Track latest timestamp across all events
             if task_events_latest_timestamp.nil? || timestamp > task_events_latest_timestamp
-              puts "#{task_identifier}: \"#{task_event_type}\" event skipped since older"
-
               task_events_latest_timestamp = timestamp
             end
 
             # Ignore events we've already seen or events that happened before we started monitoring
-            next if timestamp <= task_events_latest_timestamp_cached
+            if timestamp <= task_events_latest_timestamp_cached
+              puts "#{task_identifier}: \"#{task_event_type}\" event skipped since older"
+
+              next
+            end
 
             if TASK_EVENT_TYPE_DENYLIST.include?(task_event_type)
               puts "#{task_identifier}: \"#{task_event_type}\" event skipped due to denylist"
