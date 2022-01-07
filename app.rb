@@ -112,7 +112,7 @@ loop do
             is_critical =
               case task_event_type
               when "Terminated"
-                task_event_details["oom_killed"] == "true" || task_event_details["exit_code"] != 0
+                task_event_details["oom_killed"] == "true" || task_event_details["exit_code"] != "0"
               else
                 false
               end
