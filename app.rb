@@ -29,6 +29,9 @@ end
 NOMAD_ADDR = ENV["NOMAD_ADDR"] || "http://localhost:4646"
 NOMAD_API_BASE_URL = "#{NOMAD_ADDR}/v1".freeze
 
+# Specify which namespace to stream events for. Set this to "*" to include all namespaces
+NOMAD_NAMESPACE = ENV["NOMAD_NAMESPACE"].presence
+
 # Will automatically exit if number of seconds have elapsed past threshold since last heartbeat
 HEARTBEAT_UNDETECTED_EXIT_THRESHOLD = ENV["HEARTBEAT_UNDETECTED_EXIT_THRESHOLD"].presence&.to_i
 
@@ -52,7 +55,9 @@ puts "Starting index: #{starting_index}"
 # Used for tracking each job task
 task_metadata = Hash.new { |h, k| h[k] = {} }
 
-event_stream_body = HTTP.get("#{NOMAD_API_BASE_URL}/event/stream").body
+event_stream_params = {}
+event_stream_params[:namespace] = NOMAD_NAMESPACE if NOMAD_NAMESPACE
+event_stream_body = HTTP.get("#{NOMAD_API_BASE_URL}/event/stream", params: event_stream_params).body
 
 ndjson = NDJSON.new
 
@@ -96,12 +101,11 @@ loop do
     puts "Current index: #{index}"
 
     parsed_resource.dig("Events").each do |event_resource|
-      # For debugging purposes
-      # puts event_resource
-
+      # https://www.nomadproject.io/api-docs/events#event-topics
       case event_resource.dig("Topic")
       when "Allocation"
         allocation_resource = event_resource.dig("Payload", "Allocation")
+        namespace = allocation_resource.dig("Namespace")
         job_id = allocation_resource.dig("JobID")
 
         task_state_resources = allocation_resource.dig("TaskStates")
@@ -112,7 +116,8 @@ loop do
           # Ignore connect proxies
           next if task_id.match(/connect-proxy/)
 
-          task_identifier = "#{job_id}.#{task_id}"
+          namespace_identifier = "#{namespace}/" unless namespace == "default"
+          task_identifier = "#{namespace_identifier}#{job_id}.#{task_id}"
           task_events_latest_timestamp_cached = task_metadata[task_identifier][:latest_timestamp] || started_at
           task_events_latest_timestamp = nil
           task_events = task_state_resource.dig("Events")
