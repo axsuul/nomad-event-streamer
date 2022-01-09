@@ -72,7 +72,7 @@ job "exit-zero" {
         command = "bash"
         args = [
           "-c", 
-          "sleep 5; exit 0",
+          "sleep 10; exit 0",
         ]
       }
     }

@@ -168,22 +168,33 @@ loop do
               description << "```#{task_event_details_json}```"
             end
 
-            is_critical =
+            state =
               case task_event_type
               when "Restart Signaled"
-                task_event_details.dig("restart_reason").match?(/unhealthy/)
+                if task_event_details.dig("restart_reason").match?(/unhealthy/)
+                  :failure
+                end
               when "Terminated"
-                task_event_details.dig("oom_killed") == "true" || task_event_details.dig("exit_code") != "0"
-              else
-                false
+                if task_event_details.dig("oom_killed") == "true"
+                  :failure
+                else
+                  task_event_details.dig("exit_code") == "0" ? :success : :failure
+                end
               end
 
             embed = {
               description: description,
             }
 
-            # Add red border if event type is critical
-            embed[:color] = 15158332 if is_critical
+            # Change border of embed depending on state
+            case state
+            when :failure
+              # Red
+              embed[:color] = 15158332
+            when :success
+              # Green
+              embed[:color] = 3066993
+            end
 
             puts "#{task_identifier}: \"#{task_event_type}\" event sent to Discord"
 
