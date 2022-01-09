@@ -159,7 +159,15 @@ loop do
 
             content = "**#{task_identifier}** task is **#{task_event_type}**"
             description = task_event_display_message
-            description << "```#{task_event_details}```" if task_event_details.any?
+
+            # Format event details as JSON with any double quotes in values converted to single quotes so they aren't
+            # escaped in the output
+            if task_event_details.any?
+              task_event_details_json = task_event_details.transform_values { |v| v.gsub("\"", "'") }.to_json
+
+              description << "```#{task_event_details_json}```"
+            end
+
             is_critical =
               case task_event_type
               when "Restart Signaled"
