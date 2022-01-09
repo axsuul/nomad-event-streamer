@@ -4,8 +4,7 @@ Streams HashiCorp Nomad events to your favorite destinations:
 
 * Discord
 
-<img width="562" alt="CleanShot 2022-01-07 at 11 40 24@2x" src="https://user-images.githubusercontent.com/187961/148598168-7b5c08e6-e5f8-4ff0-980d-38a3064a2f72.png">
-
+<img width="577" alt="CleanShot 2022-01-08 at 22 41 56@2x" src="https://user-images.githubusercontent.com/187961/148672058-8fd45abc-69c9-4736-8ad9-aec8224dd54b.png">
 
 This project is under active development. Use at your own discretion!
 
