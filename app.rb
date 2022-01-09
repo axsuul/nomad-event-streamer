@@ -162,8 +162,10 @@ loop do
             description << "```#{task_event_details}```" if task_event_details.any?
             is_critical =
               case task_event_type
+              when "Restart Signaled"
+                task_event_details.dig("restart_reason").match?(/unhealthy/)
               when "Terminated"
-                task_event_details["oom_killed"] == "true" || task_event_details["exit_code"] != "0"
+                task_event_details.dig("oom_killed") == "true" || task_event_details.dig("exit_code") != "0"
               else
                 false
               end
