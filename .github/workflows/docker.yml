@@ -60,3 +60,6 @@ jobs:
         run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Output Docker image tags
+        run: echo "${{ env.DOCKER_IMAGE_TAGS }}"

@@ -50,6 +50,12 @@ TASK_EVENT_TYPE_DENYLIST = parse_env_list("TASK_EVENT_TYPE_DENYLIST")
 agent_response = HTTP.get("#{NOMAD_API_BASE_URL}/agent/self")
 starting_index = JSON.parse(agent_response.body).dig("stats", "raft", "last_log_index")&.to_i
 
+unless starting_index
+  puts "Unable to determine starting index, ensure NOMAD_ADDR is pointing to server and not client!"
+
+  exit 1
+end
+
 started_at = current_timestamp(format: :nomad)
 heartbeat_detected_at = current_timestamp
 
