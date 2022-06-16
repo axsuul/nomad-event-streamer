@@ -165,8 +165,6 @@ loop do
 
             task_event_display_message = task_event_resource.dig("DisplayMessage")
             task_event_details = task_event_resource.dig("Details")
-
-            content = "**#{task_identifier}** task is **#{task_event_type}**"
             description = task_event_display_message
 
             # Format event details as JSON with any double quotes in values converted to single quotes so they aren't
@@ -194,6 +192,7 @@ loop do
             delivered_destinations = []
 
             if DISCORD_WEBHOOK_URL
+              content = "**#{task_identifier}** task is **#{task_event_type}**"
               embed = {
                 description: description,
               }
@@ -220,6 +219,7 @@ loop do
             end
 
             if SLACK_WEBHOOK_URL
+              content = "*#{task_identifier}* task is *#{task_event_type}*"
               attachment = {
                 mrkdwn_in: ["text"],
                 pretext: content,
