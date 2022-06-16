@@ -41,9 +41,8 @@ jobs:
           echo "ghcr.io/${{ github.repository }}:${{ github.sha }}" >> $GITHUB_ENV
 
           # Only add latest tag if master branch
-          # if [[ ${{ github.ref_name }} == 'master' ]]; then
-          if [[ ${{ github.ref_name }} == 'hello/nom-12-only-tag-containers-as-latest-if-pushed' ]]; then
-            echo ",ghcr.io/${{ github.repository }}:test" >> $GITHUB_ENV
+          if [[ ${{ github.ref_name }} == 'master' ]]; then
+            echo ",ghcr.io/${{ github.repository }}:latest" >> $GITHUB_ENV
           fi
 
           echo 'EOF' >> $GITHUB_ENV
