@@ -39,11 +39,18 @@ jobs:
         run: |
           echo 'DOCKER_IMAGE_TAGS<<EOF' >> $GITHUB_ENV
           echo "ghcr.io/${{ github.repository }}:${{ github.sha }}" >> $GITHUB_ENV
+          if [[ ${{ github.ref_name }} == 'master' ]]; then
+            echo ",ghcr.io/${{ github.repository }}:master" >> $GITHUB_ENV
+          fi
           echo 'EOF' >> $GITHUB_ENV
 
       - name: Debug
         run: |
           echo "${{ env.DOCKER_IMAGE_TAGS }}"
+
+      - name: Ref name
+        run: |
+          echo "${{ github.ref_name }}"
 
       # - name: Build and push Docker image to GitHub Container Registry
       #   uses: docker/build-push-action@v2
