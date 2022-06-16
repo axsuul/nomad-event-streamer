@@ -2,11 +2,11 @@
 
 Streams HashiCorp Nomad events to your favorite destinations:
 
-* Discord
+### Discord
 
 ![Discord](assets/discord.png)
 
-* Slack
+### Slack
 
 ![Slack](assets/slack.png)
 
