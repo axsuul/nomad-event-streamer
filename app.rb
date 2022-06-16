@@ -226,7 +226,7 @@ loop do
                 text: description,
 
                 # Slack uses single asterisks for bold
-                pretext: subject.gsub(/\*\*(.+)\*\*/, "*\\1*"),
+                pretext: subject.gsub("**", "*"),
               }
 
               # Change border of embed depending on state
