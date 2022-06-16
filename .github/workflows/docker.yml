@@ -39,9 +39,13 @@ jobs:
         run: |
           echo 'DOCKER_IMAGE_TAGS<<EOF' >> $GITHUB_ENV
           echo "ghcr.io/${{ github.repository }}:${{ github.sha }}" >> $GITHUB_ENV
-          if [[ ${{ github.ref_name }} == 'master' ]]; then
-            echo ",ghcr.io/${{ github.repository }}:master" >> $GITHUB_ENV
+
+          # Only add latest tag if master branch
+          # if [[ ${{ github.ref_name }} == 'master' ]]; then
+          if [[ ${{ github.ref_name }} == 'hello/nom-12-only-tag-containers-as-latest-if-pushed' ]]; then
+            echo ",ghcr.io/${{ github.repository }}:test" >> $GITHUB_ENV
           fi
+
           echo 'EOF' >> $GITHUB_ENV
 
       - name: Build and push Docker image to GitHub Container Registry
