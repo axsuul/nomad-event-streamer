@@ -115,6 +115,7 @@ loop do
       when "Allocation"
         allocation_resource = event_resource.dig("Payload", "Allocation")
         namespace = allocation_resource.dig("Namespace")
+        node_name = allocation_resource.dig("NodeName")
         job_id = allocation_resource.dig("JobID")
 
         task_state_resources = allocation_resource.dig("TaskStates")
@@ -165,6 +166,7 @@ loop do
 
             task_event_display_message = task_event_resource.dig("DisplayMessage")
             task_event_details = task_event_resource.dig("Details")
+            subject = "**#{task_identifier}** task is **#{task_event_type}** on **#{node_name}** node"
             description = task_event_display_message
 
             # Format event details as JSON with any double quotes in values converted to single quotes so they aren't
@@ -193,7 +195,6 @@ loop do
             delivered_destinations = []
 
             if DISCORD_WEBHOOK_URL
-              content = "**#{task_identifier}** task is **#{task_event_type}**"
               embed = {
                 description: description,
               }
@@ -211,7 +212,7 @@ loop do
 
               HTTP.post(DISCORD_WEBHOOK_URL,
                 json: {
-                  content: content,
+                  content: subject,
                   embeds: [embed],
                 },
               )
@@ -220,11 +221,12 @@ loop do
             end
 
             if SLACK_WEBHOOK_URL
-              content = "*#{task_identifier}* task is *#{task_event_type}*"
               attachment = {
                 mrkdwn_in: ["text"],
-                pretext: content,
                 text: description,
+
+                # Slack uses single asterisks for bold
+                pretext: subject.gsub(/\*\*(.+)\*\*/, "*\\1*"),
               }
 
               # Change border of embed depending on state
