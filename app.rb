@@ -172,7 +172,8 @@ loop do
             if task_event_details.any?
               task_event_details_json = task_event_details.transform_values { |v| v.gsub("\"", "'") }.to_json
 
-              description << "```#{task_event_details_json}```"
+              # New line needed in Slack to render correctly
+              description << "\n```#{task_event_details_json}```"
             end
 
             state =
