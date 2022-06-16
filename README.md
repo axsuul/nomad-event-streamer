@@ -1,14 +1,18 @@
 # Nomad Event Streamer
 
-Streams HashiCorp Nomad events to your favorite destinations:
+Streams HashiCorp Nomad events to your favorite destinations.
 
-* Discord
+### Discord
 
-<img width="577" alt="CleanShot 2022-01-08 at 22 41 56@2x" src="https://user-images.githubusercontent.com/187961/148672058-8fd45abc-69c9-4736-8ad9-aec8224dd54b.png">
+![Discord](assets/discord.png)
 
-This project is under active development. Use at your own discretion!
+### Slack
+
+![Slack](assets/slack.png)
 
 ## Usage
+
+*This project is under active development. Use at your own discretion!*
 
 Refer to [app.rb](./app.rb) for supported environment variables. 
 

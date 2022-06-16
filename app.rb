@@ -35,17 +35,26 @@ NOMAD_NAMESPACE = ENV["NOMAD_NAMESPACE"].presence
 # Will automatically exit if number of seconds have elapsed past threshold since last heartbeat
 HEARTBEAT_UNDETECTED_EXIT_THRESHOLD = ENV["HEARTBEAT_UNDETECTED_EXIT_THRESHOLD"].presence&.to_i
 
-# Where Discord events are sent
-DISCORD_WEBHOOK_URL = ENV["DISCORD_WEBHOOK_URL"]
+# Where Discord events should be sent
+DISCORD_WEBHOOK_URL = ENV["DISCORD_WEBHOOK_URL"].presence
+
+# Where Slack events should be sent
+SLACK_WEBHOOK_URL = ENV["SLACK_WEBHOOK_URL"].presence
 
 # Comma separated event types to allow or deny (ignore)
 # See for possible event types: https://www.nomadproject.io/api-docs/allocations#events
 TASK_EVENT_TYPE_ALLOWLIST = parse_env_list("TASK_EVENT_TYPE_ALLOWLIST")
 TASK_EVENT_TYPE_DENYLIST = parse_env_list("TASK_EVENT_TYPE_DENYLIST")
 
-# Retrieve last index so we now which events are older
+# Retrieve last index so we know which events are older
 agent_response = HTTP.get("#{NOMAD_API_BASE_URL}/agent/self")
 starting_index = JSON.parse(agent_response.body).dig("stats", "raft", "last_log_index")&.to_i
+
+unless starting_index
+  puts "Unable to determine starting index, ensure NOMAD_ADDR is pointing to server and not client!"
+
+  exit 1
+end
 
 started_at = current_timestamp(format: :nomad)
 heartbeat_detected_at = current_timestamp
@@ -156,8 +165,6 @@ loop do
 
             task_event_display_message = task_event_resource.dig("DisplayMessage")
             task_event_details = task_event_resource.dig("Details")
-
-            content = "**#{task_identifier}** task is **#{task_event_type}**"
             description = task_event_display_message
 
             # Format event details as JSON with any double quotes in values converted to single quotes so they aren't
@@ -165,7 +172,8 @@ loop do
             if task_event_details.any?
               task_event_details_json = task_event_details.transform_values { |v| v.gsub("\"", "'") }.to_json
 
-              description << "```#{task_event_details_json}```"
+              # New line needed in Slack to render correctly
+              description << "\n```#{task_event_details_json}```"
             end
 
             state =
@@ -182,28 +190,63 @@ loop do
                 end
               end
 
-            embed = {
-              description: description,
-            }
+            delivered_destinations = []
 
-            # Change border of embed depending on state
-            case state
-            when :failure
-              # Red
-              embed[:color] = 15158332
-            when :success
-              # Green
-              embed[:color] = 3066993
+            if DISCORD_WEBHOOK_URL
+              content = "**#{task_identifier}** task is **#{task_event_type}**"
+              embed = {
+                description: description,
+              }
+
+              # Change border of embed depending on state. Colors are in decimal format:
+              # https://www.mathsisfun.com/hexadecimal-decimal-colors.html
+              case state
+              when :failure
+                # Red
+                embed[:color] = 15158332
+              when :success
+                # Green
+                embed[:color] = 3066993
+              end
+
+              HTTP.post(DISCORD_WEBHOOK_URL,
+                json: {
+                  content: content,
+                  embeds: [embed],
+                },
+              )
+
+              delivered_destinations << "Discord"
             end
 
-            puts "#{task_identifier}: \"#{task_event_type}\" event sent to Discord"
+            if SLACK_WEBHOOK_URL
+              content = "*#{task_identifier}* task is *#{task_event_type}*"
+              attachment = {
+                mrkdwn_in: ["text"],
+                pretext: content,
+                text: description,
+              }
 
-            HTTP.post(DISCORD_WEBHOOK_URL,
-              json: {
-                content: content,
-                embeds: [embed],
-              },
-            )
+              # Change border of embed depending on state
+              case state
+              when :failure
+                # Red
+                attachment[:color] = "#e74c3c"
+              when :success
+                # Green
+                attachment[:color] = "#2ecc71"
+              end
+
+              HTTP.post(SLACK_WEBHOOK_URL,
+                json: {
+                  attachments: [attachment],
+                },
+              )
+
+              delivered_destinations << "Slack"
+            end
+
+            puts "#{task_identifier}: \"#{task_event_type}\" event sent to #{delivered_destinations.join(', ')}"
           end
 
           # Track most recent event timestamp for task so we don't re-do events we've already seen next time around
