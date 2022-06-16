@@ -1,6 +1,6 @@
 # Nomad Event Streamer
 
-Streams HashiCorp Nomad events to your favorite destinations:
+Streams HashiCorp Nomad events to your favorite destinations.
 
 ### Discord
 
@@ -10,9 +10,9 @@ Streams HashiCorp Nomad events to your favorite destinations:
 
 ![Slack](assets/slack.png)
 
-This project is under active development. Use at your own discretion!
-
 ## Usage
+
+*This project is under active development. Use at your own discretion!*
 
 Refer to [app.rb](./app.rb) for supported environment variables. 
 
