@@ -35,14 +35,24 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build Docker image tags
+        run: |
+          echo 'DOCKER_IMAGE_TAGS<<EOF' >> $GITHUB_ENV
+          echo "ghcr.io/${{ github.repository }}:${{ github.sha }}" >> $GITHUB_ENV
+
+          # Only add latest tag if master branch
+          if [[ ${{ github.ref_name }} == 'master' ]]; then
+            echo ",ghcr.io/${{ github.repository }}:latest" >> $GITHUB_ENV
+          fi
+
+          echo 'EOF' >> $GITHUB_ENV
+
       - name: Build and push Docker image to GitHub Container Registry
         uses: docker/build-push-action@v2
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+          tags: ${{ env.DOCKER_IMAGE_TAGS }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
 
