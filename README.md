@@ -12,8 +12,6 @@ Streams HashiCorp Nomad events to your favorite destinations.
 
 ## Usage
 
-*This project is under active development. Use at your own discretion!*
-
 Refer to [app.rb](./app.rb) for supported environment variables. 
 
 ## Docker
