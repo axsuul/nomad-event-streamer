@@ -3,6 +3,7 @@
 require "active_support"
 require "active_support/core_ext"
 require "http"
+require "logger"
 
 require_relative "lib/ndjson"
 
@@ -59,12 +60,16 @@ SLACK_WEBHOOK_URL = ENV["SLACK_WEBHOOK_URL"].presence
 TASK_EVENT_TYPE_ALLOWLIST = parse_env_list("TASK_EVENT_TYPE_ALLOWLIST")
 TASK_EVENT_TYPE_DENYLIST = parse_env_list("TASK_EVENT_TYPE_DENYLIST")
 
+# Initialize logger
+LOGGER_LEVEL = ENV.fetch("LOGGER_LEVEL", "info").to_sym
+LOGGER = Logger.new(STDOUT, level: LOGGER_LEVEL)
+
 # Retrieve last index so we know which events are older
 agent_response = send_api_request(:get, "#{NOMAD_API_BASE_URL}/agent/self")
 starting_index = JSON.parse(agent_response.body).dig("stats", "raft", "last_log_index")&.to_i
 
 unless starting_index
-  puts "Unable to determine starting index, ensure NOMAD_ADDR is pointing to server and not client!"
+  LOGGER.error "Unable to determine starting index, ensure NOMAD_ADDR is pointing to server and not client!"
 
   exit 1
 end
@@ -72,14 +77,14 @@ end
 started_at = current_timestamp(format: :nomad)
 heartbeat_detected_at = current_timestamp
 
-puts "Starting index: #{starting_index}"
+LOGGER.info "Starting index: #{starting_index}"
 
 # Used for tracking each job task
 task_metadata = Hash.new { |h, k| h[k] = {} }
 
 event_stream_params = {}
 event_stream_params[:namespace] = NOMAD_NAMESPACE if NOMAD_NAMESPACE
-event_stream_body = HTTP.get("#{NOMAD_API_BASE_URL}/event/stream", params: event_stream_params).body
+# event_stream_body = HTTP.get("#{NOMAD_API_BASE_URL}/event/stream", params: event_stream_params).body
 event_stream_body = send_api_request(:get, "#{NOMAD_API_BASE_URL}/event/stream", params: event_stream_params).body
 
 ndjson = NDJSON.new
@@ -91,7 +96,7 @@ if HEARTBEAT_UNDETECTED_EXIT_THRESHOLD
       seconds_since_last_heartbeat = current_timestamp - heartbeat_detected_at
 
       if seconds_since_last_heartbeat > HEARTBEAT_UNDETECTED_EXIT_THRESHOLD
-        puts "Heartbeat undetected for #{seconds_since_last_heartbeat} " \
+        LOGGER.error "Heartbeat undetected for #{seconds_since_last_heartbeat} " \
           "#{'second'.pluralize(seconds_since_last_heartbeat)} " \
           "(threshold: #{HEARTBEAT_UNDETECTED_EXIT_THRESHOLD}), exiting..."
 
@@ -105,11 +110,12 @@ end
 
 loop do
   parsed_resources_collection = ndjson.parse_partial(event_stream_body.readpartial)
+  LOGGER.debug "event_stream_body: #{parsed_resources_collection}"
 
   parsed_resources_collection.each do |parsed_resource|
     # An empty JSON object is to signal heartbeat
     if parsed_resource.empty?
-      puts "Heartbeat detected"
+      LOGGER.info "Heartbeat detected"
 
       heartbeat_detected_at = current_timestamp
 
@@ -121,7 +127,7 @@ loop do
     # Ignore older events
     next if starting_index >= index
 
-    puts "Current index: #{index}"
+    LOGGER.info "Current index: #{index}"
 
     parsed_resource.dig("Events").each do |event_resource|
       # https://www.nomadproject.io/api-docs/events#event-topics
@@ -146,7 +152,7 @@ loop do
           task_events_latest_timestamp = nil
           task_events = task_state_resource.dig("Events")
 
-          puts "#{task_identifier}: #{task_events.size} #{'event'.pluralize(task_events.size)} detected"
+          LOGGER.info "#{task_identifier}: #{task_events.size} #{'event'.pluralize(task_events.size)} detected"
 
           task_events.each do |task_event_resource|
             task_event_type = task_event_resource.dig("Type")
@@ -161,19 +167,19 @@ loop do
 
             # Ignore events we've already seen or events that happened before we started monitoring
             if timestamp <= task_events_latest_timestamp_cached
-              puts "#{task_identifier}: \"#{task_event_type}\" event skipped due to being older"
+              LOGGER.warn "#{task_identifier}: \"#{task_event_type}\" event skipped due to being older"
 
               next
             end
 
             if TASK_EVENT_TYPE_DENYLIST.include?(task_event_type)
-              puts "#{task_identifier}: \"#{task_event_type}\" event skipped due to denylist"
+              LOGGER.info "#{task_identifier}: \"#{task_event_type}\" event skipped due to denylist"
 
               next
             end
 
             if TASK_EVENT_TYPE_ALLOWLIST.any? && !TASK_EVENT_TYPE_ALLOWLIST.include?(task_event_type)
-              puts "#{task_identifier}: \"#{task_event_type}\" event skipped due to allowlist"
+              LOGGER.info "#{task_identifier}: \"#{task_event_type}\" event skipped due to allowlist"
 
               next
             end
@@ -195,7 +201,7 @@ loop do
             state =
               case task_event_type
               when "Restart Signaled"
-                if task_event_details.dig("restart_reason").match?(/unhealthy/)
+                if task_event_details.any? && task_event_details.dig("restart_reason").match?(/unhealthy/)
                   :failure
                 end
               when "Terminated"
@@ -224,12 +230,14 @@ loop do
                 embed[:color] = 3066993
               end
 
-              HTTP.post(DISCORD_WEBHOOK_URL,
-                json: {
-                  content: subject,
-                  embeds: [embed],
-                },
-              )
+              discord_body = {
+                content: subject,
+                embeds: [embed],
+              }
+
+              LOGGER.debug "Sending notification to Discord: #{subject} with body: #{discord_body}"
+
+              HTTP.post(DISCORD_WEBHOOK_URL, json: discord_body)
 
               delivered_destinations << "Discord"
             end
@@ -253,6 +261,8 @@ loop do
                 attachment[:color] = "#2ecc71"
               end
 
+              LOGGER.debug "Sending notification to Slack: #{subject} with body: #{attachment}"
+
               HTTP.post(SLACK_WEBHOOK_URL,
                 json: {
                   attachments: [attachment],
@@ -262,7 +272,7 @@ loop do
               delivered_destinations << "Slack"
             end
 
-            puts "#{task_identifier}: \"#{task_event_type}\" event sent to #{delivered_destinations.join(', ')}"
+            LOGGER.info "#{task_identifier}: \"#{task_event_type}\" event sent to #{delivered_destinations.join(', ')}"
           end
 
           # Track most recent event timestamp for task so we don't re-do events we've already seen next time around
