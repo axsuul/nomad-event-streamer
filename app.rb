@@ -195,8 +195,10 @@ loop do
             state =
               case task_event_type
               when "Restart Signaled"
-                if task_event_details.dig("restart_reason").match?(/unhealthy/)
+                if task_event_details.dig("restart_reason")&.match?(/unhealthy/)
                   :failure
+                else
+                  :success
                 end
               when "Terminated"
                 if task_event_details.dig("oom_killed") == "true"
